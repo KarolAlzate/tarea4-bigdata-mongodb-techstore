@@ -1,0 +1,109 @@
+use bigdata_tarea4
+switched to db bigdata_tarea4
+use bigdata_tarea4;
+
+db.productos.drop();
+db.ventas.drop();
+
+const categorias = ["Computadores", "Accesorios", "Monitores", "Redes", "Almacenamiento"];
+const marcas = ["HP", "Logitech", "Samsung", "Cisco", "Kingston"];
+let listaProductos = [];
+
+for (let i = 1; i <= 100; i++) {
+  let cat = categorias[i % categorias.length];
+  let mar = marcas[i % marcas.length];
+  listaProductos.push({
+    producto_id: "PROD-" + String(i).padStart(3, '0'),
+    nombre: cat + " Modelo " + i,
+    categoria: cat,
+    marca: mar,
+    precio: (i * 25000) + 100000,
+    stock: (i % 30) + 5,
+    especificaciones: {
+      garantia_meses: (i % 2 === 0) ? 12 : 24,
+      peso_kg: Number(((i % 5) + 0.5).toFixed(1))
+    },
+    activo: true
+  });
+}
+
+db.productos.insertMany(listaProductos);
+db.productos.countDocuments();
+
+db.ventas.insertMany([
+  { venta_id: "V-01", producto_id: "PROD-001", cantidad: 2, cliente: "Karol Alzate", ciudad: "Valledupar" },
+  { venta_id: "V-02", producto_id: "PROD-005", cantidad: 1, cliente: "Carlos Perez", ciudad: "Bogotá" },
+  { venta_id: "V-03", producto_id: "PROD-010", cantidad: 4, cliente: "Ana Gomez", ciudad: "Medellín" }
+]);
+switched to db bigdata_tarea4;
+// A. Inserción individual (insertOne)
+db.productos.insertOne({
+  producto_id: "PROD-101",
+  nombre: "Router Empresarial WiFi 6",
+  categoria: "Redes",
+  marca: "Cisco",
+  precio: 850000,
+  stock: 12,
+  especificaciones: { garantia_meses: 36, peso_kg: 1.2 },
+  activo: true
+});
+
+// B. Selección (find)
+db.productos.find({ marca: "HP" }).limit(5);
+
+// C. Actualización (updateOne)
+db.productos.updateOne(
+  { producto_id: "PROD-101" },
+  { $set: { precio: 820000, en_promocion: true } }
+);
+
+// D. Eliminación (deleteOne)
+db.productos.deleteOne({ producto_id: "PROD-101" });
+{
+  acknowledged: true,
+  deletedCount: 1
+}
+// Filtros con operadores lógicos y de comparación ($in, $gt, $lte, $gte)
+db.productos.find({
+  categoria: { $in: ["Computadores", "Monitores"] },
+  precio: { $gt: 500000, $lte: 1500000 },
+  stock: { $gte: 10 }
+});
+
+// Operación Join ($lookup) entre 'ventas' y 'productos'
+db.ventas.aggregate([
+  {
+    $lookup: {
+      from: "productos",
+      localField: "producto_id",
+      foreignField: "producto_id",
+      as: "detalle_producto"
+    }
+  },
+  { $unwind: "$detalle_producto" },
+  {
+    $project: {
+      _id: 0,
+      venta_id: 1,
+      cliente: 1,
+      ciudad: 1,
+      producto: "$detalle_producto.nombre",
+      precio_unitario: "$detalle_producto.precio",
+      cantidad: 1,
+      total_venta: { $multiply: ["$cantidad", "$detalle_producto.precio"] }
+    }
+  }
+]);
+// Consultas de agregación: contar, sumar, promediar y máximo por categoría
+db.productos.aggregate([
+  {
+    $group: {
+      _id: "$categoria",
+      total_productos: { $sum: 1 },
+      suma_stock_total: { $sum: "$stock" },
+      precio_promedio: { $avg: "$precio" },
+      precio_maximo: { $max: "$precio" }
+    }
+  },
+  { $sort: { precio_promedio: -1 } }
+]);
